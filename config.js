@@ -1,4 +1,4 @@
 window.LOTTERY_CONFIG = {
-  supabaseUrl: "PASTE_YOUR_SUPABASE_PROJECT_URL_HERE",
-  supabaseAnonKey: "PASTE_YOUR_SUPABASE_PUBLISHABLE_OR_ANON_KEY_HERE"
+  supabaseUrl: "https://qoefysnrgaspqimednbe.supabase.co",
+  supabaseAnonKey: "sb_publishable_rin6152IP-DOA5c6RVMSWg_xpEg_BSN"
 };
