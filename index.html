@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f7f2">
+  <meta name="description" content="创建小组抽签房间，邀请成员自行加入，公平选出组长和副组长。">
+  <title>小组抽签 · 一起决定</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <main class="page">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">签</span>小组抽签</div>
+
+    <header class="intro">
+      <p class="eyebrow">公平 · 简单 · 一起参与</p>
+      <h1>今天谁来带队？</h1>
+      <p class="intro-copy">创建一个抽签房间，发给小组成员，大家加入后一起揭晓结果。</p>
+    </header>
+
+    <section class="main-card" aria-label="小组职务抽签">
+      <section class="setup" id="setupPanel">
+        <div class="section-heading">
+          <h2>创建抽签房间</h2>
+          <span class="section-hint">选好人数后，把邀请链接发到群里</span>
+        </div>
+
+        <div class="count-row">
+          <label class="count-label" for="memberCount">
+            房间人数上限
+            <small>至少 2 人，最多 20 人</small>
+          </label>
+          <div class="count-control" aria-label="调整房间人数上限">
+            <button class="stepper" id="decreaseCount" type="button" aria-label="减少人数">−</button>
+            <input id="memberCount" type="number" min="2" max="20" value="6" inputmode="numeric" aria-label="房间人数上限，2 至 20 人">
+            <button class="stepper" id="increaseCount" type="button" aria-label="增加人数">+</button>
+          </div>
+        </div>
+
+        <button class="primary-button" id="createRoomButton" type="button">创建房间</button>
+        <p class="error" id="setupError" role="alert" aria-live="polite"></p>
+      </section>
+
+      <section class="room-panel" id="roomPanel" hidden>
+        <div class="room-top">
+          <div>
+            <p class="eyebrow room-eyebrow">抽签房间</p>
+            <h2>大家都准备好了吗？</h2>
+          </div>
+          <span class="room-code" id="roomCode"></span>
+        </div>
+        <p class="room-summary" id="roomSummary"></p>
+
+        <div class="invite-box">
+          <div class="invite-copy">
+            <strong>邀请组员加入</strong>
+            <span>复制链接并发到你们的小组群</span>
+          </div>
+          <button class="secondary-button" id="copyLinkButton" type="button">复制邀请链接</button>
+        </div>
+        <input class="invite-url" id="inviteUrl" type="text" readonly aria-label="房间邀请链接">
+
+        <section class="join-section" id="joinSection">
+          <label class="field-label" for="nameInput">输入你的姓名加入抽签</label>
+          <div class="join-row">
+            <input id="nameInput" class="text-input" type="text" maxlength="40" autocomplete="name" placeholder="例如：小明">
+            <button class="primary-button join-button" id="joinButton" type="button">加入房间</button>
+          </div>
+          <p class="error" id="joinError" role="alert" aria-live="polite"></p>
+        </section>
+        <p class="joined-note" id="joinedNote" hidden>你已加入本次抽签，等大家到齐后就可以揭晓结果。</p>
+
+        <section class="members-section">
+          <div class="section-heading members-heading">
+            <h3>已加入的成员</h3>
+            <span class="member-count" id="memberCountLabel">0 / 6 人</span>
+          </div>
+          <ul class="member-list" id="memberList"></ul>
+          <p class="empty-state" id="emptyState">还没有人加入，把邀请链接发给组员吧。</p>
+        </section>
+
+        <div class="draw-area" id="drawArea" hidden>
+          <button class="primary-button draw-button" id="drawButton" type="button">揭晓组长和副组长</button>
+          <p class="draw-hint" id="drawHint">至少需要 2 位成员加入才能抽签。</p>
+        </div>
+
+        <section class="result-area" id="resultArea" hidden aria-live="polite" aria-atomic="true">
+          <p class="eyebrow">抽签结果</p>
+          <h3>恭喜两位，新的小组搭档诞生啦！</h3>
+          <div class="result-grid">
+            <article class="result-card">
+              <span class="role-label">✦ 组长</span>
+              <strong class="result-name" id="leaderName"></strong>
+            </article>
+            <article class="result-card deputy">
+              <span class="role-label">◇ 副组长</span>
+              <strong class="result-name" id="deputyName"></strong>
+            </article>
+          </div>
+          <p class="draw-hint">每位成员机会均等，同一轮不会重复当选。</p>
+        </section>
+      </section>
+    </section>
+
+    <footer class="page-footer">成员名单仅用于本次抽签。房间将在 24 小时后失效。</footer>
+    <p class="setup-help" id="setupHelp" hidden>网站尚未连接抽签服务。请先完成 <a href="./README.md">部署配置</a>。</p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="./config.js"></script>
+  <script>
+    (() => {
+      const elements = {
+        setupPanel: document.getElementById("setupPanel"),
+        setupHelp: document.getElementById("setupHelp"),
+        setupError: document.getElementById("setupError"),
+        countInput: document.getElementById("memberCount"),
+        decreaseCount: document.getElementById("decreaseCount"),
+        increaseCount: document.getElementById("increaseCount"),
+        createRoomButton: document.getElementById("createRoomButton"),
+        roomPanel: document.getElementById("roomPanel"),
+        roomCode: document.getElementById("roomCode"),
+        roomSummary: document.getElementById("roomSummary"),
+        copyLinkButton: document.getElementById("copyLinkButton"),
+        inviteUrl: document.getElementById("inviteUrl"),
+        joinSection: document.getElementById("joinSection"),
+        nameInput: document.getElementById("nameInput"),
+        joinButton: document.getElementById("joinButton"),
+        joinError: document.getElementById("joinError"),
+        joinedNote: document.getElementById("joinedNote"),
+        memberCountLabel: document.getElementById("memberCountLabel"),
+        memberList: document.getElementById("memberList"),
+        emptyState: document.getElementById("emptyState"),
+        drawArea: document.getElementById("drawArea"),
+        drawButton: document.getElementById("drawButton"),
+        drawHint: document.getElementById("drawHint"),
+        resultArea: document.getElementById("resultArea"),
+        leaderName: document.getElementById("leaderName"),
+        deputyName: document.getElementById("deputyName")
+      };
+
+      const config = window.LOTTERY_CONFIG;
+      const supabaseReady = window.supabase && config &&
+        /^https:\/\//.test(config.supabaseUrl || "") &&
+        config.supabaseAnonKey &&
+        !config.supabaseAnonKey.includes("PASTE_");
+      const supabase = supabaseReady
+        ? window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey)
+        : null;
+      const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+      const refreshInterval = 2500;
+      let roomCode = "";
+      let hostToken = "";
+      let roomData = null;
+      let refreshTimer;
+      let refreshing = false;
+
+      function setError(element, message) {
+        element.textContent = message || "";
+      }
+
+      function normalizeCount(value) {
+        const number = Number.parseInt(value, 10);
+        return Number.isFinite(number) ? Math.min(20, Math.max(2, number)) : 2;
+      }
+
+      function setCount(value) {
+        const count = normalizeCount(value);
+        elements.countInput.value = count;
+        elements.decreaseCount.disabled = count <= 2;
+        elements.increaseCount.disabled = count >= 20;
+      }
+
+      function randomString(length) {
+        const bytes = new Uint8Array(length);
+        window.crypto.getRandomValues(bytes);
+        return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join("");
+      }
+
+      function getInviteUrl() {
+        const url = new URL(window.location.href);
+        url.search = `?room=${encodeURIComponent(roomCode)}`;
+        url.hash = "";
+        return url.toString();
+      }
+
+      function friendlyError(error) {
+        const message = error && error.message ? error.message : "发生未知错误，请稍后重试。";
+        if (/room_full/i.test(message)) return "房间人数已满，无法加入。";
+        if (/duplicate_name/i.test(message)) return "这个姓名已经加入，请换一个姓名。";
+        if (/room_closed/i.test(message)) return "抽签已经结束，房间不能再加入。";
+        if (/room_expired|room_not_found/i.test(message)) return "房间不存在或已过期，请向发起人索取新的链接。";
+        if (/not_enough_members/i.test(message)) return "至少需要 2 位成员加入后才能抽签。";
+        if (/invalid_name/i.test(message)) return "请输入 1 至 40 个字符的姓名。";
+        if (/invalid_host_token/i.test(message)) return "发起人凭证无效，请使用创建房间的页面操作。";
+        return message;
+      }
+
+      async function rpc(name, params) {
+        if (!supabase) throw new Error("网站尚未连接抽签服务。");
+        const { data, error } = await supabase.rpc(name, params);
+        if (error) throw new Error(friendlyError(error));
+        return data;
+      }
+
+      function showRoom() {
+        elements.setupPanel.hidden = true;
+        elements.roomPanel.hidden = false;
+        elements.roomCode.textContent = roomCode;
+        elements.inviteUrl.value = getInviteUrl();
+      }
+
+      function renderRoom() {
+        const members = roomData.members || [];
+        const maxMembers = roomData.max_members;
+        const isFinished = roomData.status === "finished";
+        const isHost = Boolean(hostToken);
+        const savedName = sessionStorage.getItem(`lottery-${roomCode}`);
+        const hasJoined = Boolean(savedName && members.some(member =>
+          member.name.toLocaleLowerCase() === savedName.toLocaleLowerCase()
+        ));
+
+        elements.roomSummary.textContent = isFinished
+          ? "本轮抽签已完成。"
+          : `房间 ${roomCode} · 已加入 ${members.length} / ${maxMembers} 人 · 名单自动更新`;
+        elements.memberCountLabel.textContent = `${members.length} / ${maxMembers} 人`;
+        elements.memberList.replaceChildren();
+        for (const member of members) {
+          const item = document.createElement("li");
+          const dot = document.createElement("span");
+          dot.className = "member-dot";
+          dot.setAttribute("aria-hidden", "true");
+          const name = document.createElement("span");
+          name.className = "member-name";
+          name.textContent = member.name;
+          item.append(dot, name);
+          elements.memberList.append(item);
+        }
+        elements.emptyState.hidden = members.length > 0;
+        elements.memberList.hidden = members.length === 0;
+        elements.joinSection.hidden = hasJoined || isFinished || members.length >= maxMembers;
+        elements.joinedNote.hidden = !hasJoined || isFinished;
+        elements.drawArea.hidden = !isHost || isFinished;
+        elements.drawButton.disabled = members.length < 2;
+        elements.drawHint.textContent = members.length < 2
+          ? "至少需要 2 位成员加入才能抽签。"
+          : `当前有 ${members.length} 位成员，确认名单后即可抽签。`;
+        elements.resultArea.hidden = !isFinished;
+        if (isFinished) {
+          elements.leaderName.textContent = roomData.leader_name;
+          elements.deputyName.textContent = roomData.deputy_name;
+        }
+      }
+
+      async function refreshRoom() {
+        if (refreshing || !roomCode) return;
+        refreshing = true;
+        try {
+          roomData = await rpc("get_lottery_room", { p_code: roomCode });
+          renderRoom();
+          setError(elements.joinError, "");
+          if (roomData.status === "finished") clearInterval(refreshTimer);
+        } catch (error) {
+          setError(elements.setupError, friendlyError(error));
+          clearInterval(refreshTimer);
+        } finally {
+          refreshing = false;
+        }
+      }
+
+      function startRoomRefresh() {
+        clearInterval(refreshTimer);
+        refreshRoom();
+        refreshTimer = window.setInterval(refreshRoom, refreshInterval);
+      }
+
+      async function createRoom() {
+        setError(elements.setupError, "");
+        elements.createRoomButton.disabled = true;
+        elements.createRoomButton.textContent = "正在创建…";
+        try {
+          const maxMembers = normalizeCount(elements.countInput.value);
+          setCount(maxMembers);
+          roomCode = randomString(12);
+          hostToken = randomString(48);
+          await rpc("create_lottery_room", {
+            p_code: roomCode,
+            p_host_token: hostToken,
+            p_max_members: maxMembers
+          });
+          sessionStorage.setItem(`lottery-host-${roomCode}`, hostToken);
+          const url = new URL(window.location.href);
+          url.search = `?room=${encodeURIComponent(roomCode)}`;
+          url.hash = "";
+          window.history.replaceState(null, "", url);
+          await openRoom();
+        } catch (error) {
+          setError(elements.setupError, friendlyError(error));
+        } finally {
+          elements.createRoomButton.disabled = false;
+          elements.createRoomButton.textContent = "创建房间";
+        }
+      }
+
+      async function joinRoom() {
+        setError(elements.joinError, "");
+        const name = elements.nameInput.value.trim();
+        if (!name || name.length > 40) {
+          setError(elements.joinError, "请输入 1 至 40 个字符的姓名。");
+          return;
+        }
+        elements.joinButton.disabled = true;
+        try {
+          await rpc("join_lottery_room", { p_code: roomCode, p_name: name });
+          sessionStorage.setItem(`lottery-${roomCode}`, name);
+          elements.nameInput.value = "";
+          await refreshRoom();
+        } catch (error) {
+          setError(elements.joinError, friendlyError(error));
+        } finally {
+          elements.joinButton.disabled = false;
+        }
+      }
+
+      async function drawLots() {
+        if (!hostToken) return;
+        setError(elements.setupError, "");
+        elements.drawButton.disabled = true;
+        elements.drawButton.textContent = "正在抽签…";
+        try {
+          await rpc("draw_lottery_room", { p_code: roomCode, p_host_token: hostToken });
+          await refreshRoom();
+        } catch (error) {
+          setError(elements.setupError, friendlyError(error));
+        } finally {
+          if (roomData && roomData.status !== "finished") {
+            elements.drawButton.disabled = (roomData.members || []).length < 2;
+            elements.drawButton.textContent = "揭晓组长和副组长";
+          }
+        }
+      }
+
+      async function copyInviteLink() {
+        elements.inviteUrl.value = getInviteUrl();
+        elements.inviteUrl.focus();
+        elements.inviteUrl.select();
+        try {
+          await navigator.clipboard.writeText(elements.inviteUrl.value);
+          elements.copyLinkButton.textContent = "已复制";
+          window.setTimeout(() => { elements.copyLinkButton.textContent = "复制邀请链接"; }, 1800);
+        } catch {
+          setError(elements.setupError, "无法自动复制，请手动复制上方选中的邀请链接。");
+        }
+      }
+
+      async function openRoom() {
+        showRoom();
+        await refreshRoom();
+        startRoomRefresh();
+      }
+
+      function initialize() {
+        if (!supabase) {
+          elements.setupHelp.hidden = false;
+          elements.createRoomButton.disabled = true;
+          setError(elements.setupError, "抽签服务尚未配置，暂时无法创建共享房间。");
+          return;
+        }
+        const params = new URLSearchParams(window.location.search);
+        const requestedCode = params.get("room");
+        if (!requestedCode) return;
+        if (!/^[A-Z2-9]{12}$/i.test(requestedCode)) {
+          setError(elements.setupError, "房间链接格式不正确，请向发起人索取新的链接。");
+          return;
+        }
+        roomCode = requestedCode.toUpperCase();
+        hostToken = sessionStorage.getItem(`lottery-host-${roomCode}`) || "";
+        openRoom();
+      }
+
+      elements.countInput.addEventListener("change", () => {
+        setCount(elements.countInput.value);
+      });
+      elements.decreaseCount.addEventListener("click", () => {
+        setCount(normalizeCount(elements.countInput.value) - 1);
+      });
+      elements.increaseCount.addEventListener("click", () => {
+        setCount(normalizeCount(elements.countInput.value) + 1);
+      });
+      elements.createRoomButton.addEventListener("click", createRoom);
+      elements.joinButton.addEventListener("click", joinRoom);
+      elements.nameInput.addEventListener("keydown", event => {
+        if (event.key === "Enter") joinRoom();
+      });
+      elements.copyLinkButton.addEventListener("click", copyInviteLink);
+      elements.drawButton.addEventListener("click", drawLots);
+      setCount(elements.countInput.value);
+      initialize();
+    })();
+  </script>
+</body>
+</html>
